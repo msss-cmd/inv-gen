@@ -2,11 +2,11 @@ import streamlit as st
 import datetime
 from docx import Document
 from docx.shared import Inches, Pt, Cm, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH # WD_SHADING removed to resolve import error
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.oxml.ns import qn
-from docx.oxml import OxmlElement # For setting table cell borders
-import io # To handle file in memory
+from docx.oxml import OxmlElement
+import io
 
 # --- Helper function to set table cell borders ---
 def set_cell_border(cell, **kwargs):
@@ -55,7 +55,7 @@ def set_cell_border(cell, **kwargs):
 def generate_invoice_docx(invoice_data):
     document = Document()
 
-    # Set document margins (typically 1.27 cm / 0.5 inches or 1.5cm / 0.6 inches for a clean look)
+    # Set document margins (typically 1.5cm / 0.6 inches for a clean look)
     sections = document.sections
     for section in sections:
         section.top_margin = Cm(1.5)
@@ -69,7 +69,7 @@ def generate_invoice_docx(invoice_data):
     run_title = title.runs[0]
     run_title.font.name = 'Arial' # Common clean font
     run_title.bold = True
-    run_title.font.size = Pt(16) # Slightly reduced from 18, check template
+    run_title.font.size = Pt(16)
     # Add spacing after title
     title.paragraph_format.space_after = Pt(12)
 
@@ -79,10 +79,10 @@ def generate_invoice_docx(invoice_data):
     header_info_table.autofit = False
     header_info_table.allow_autofit = False
     
-    # Precise column widths for header table (adjust these by small increments if needed)
-    header_info_table.columns[0].width = Cm(3.0) # Labels like "To:", "Address:"
-    header_info_table.columns[1].width = Cm(6.5) # Values like Company Name, Address
-    header_info_table.columns[2].width = Cm(3.5) # Labels like "Date:", "SSS Invoice No:"
+    # Precise column widths for header table (ADJUSTED FOR FIT)
+    header_info_table.columns[0].width = Cm(2.8) # Labels like "To:", "Address:"
+    header_info_table.columns[1].width = Cm(6.3) # Values like Company Name, Address
+    header_info_table.columns[2].width = Cm(3.4) # Labels like "Date:", "SSS Invoice No:"
     header_info_table.columns[3].width = Cm(5.0) # Values like Date, Invoice No
 
     # Populate cells
@@ -120,14 +120,14 @@ def generate_invoice_docx(invoice_data):
     item_table.autofit = False
     item_table.allow_autofit = False
 
-    # Set precise column widths for line items table
+    # Set precise column widths for line items table (ADJUSTED FOR FIT)
     item_table.columns[0].width = Cm(1.2)  # No
-    item_table.columns[1].width = Cm(7.8)  # Description (adjusted)
-    item_table.columns[2].width = Cm(2.2)  # Unit price (adjusted)
-    item_table.columns[3].width = Cm(1.2)  # BHD (Unit) (adjusted)
-    item_table.columns[4].width = Cm(1.2)  # Qty (adjusted)
-    item_table.columns[5].width = Cm(2.2)  # Total price (adjusted)
-    item_table.columns[6].width = Cm(1.2)  # BHD (Total) (adjusted)
+    item_table.columns[1].width = Cm(7.5)  # Description
+    item_table.columns[2].width = Cm(2.1)  # Unit price
+    item_table.columns[3].width = Cm(1.2)  # BHD (Unit)
+    item_table.columns[4].width = Cm(1.2)  # Qty
+    item_table.columns[5].width = Cm(2.1)  # Total price
+    item_table.columns[6].width = Cm(1.2)  # BHD (Total)
 
     # Apply 'Table Grid' style for standard borders
     item_table.style = 'Table Grid'
@@ -152,9 +152,6 @@ def generate_invoice_docx(invoice_data):
             run.font.name = 'Arial'
             run.bold = True
             run.font.size = Pt(9)
-        # Removed shading application to resolve persistent import error
-        # cell.shading.fill = WD_SHADING.TEXTURE_NONE
-        # cell.shading.foreground = RGBColor(0xD9, 0xD9, 0xD9)
 
     # Add item rows
     for i, item in enumerate(invoice_data['line_items']):
@@ -196,10 +193,8 @@ def generate_invoice_docx(invoice_data):
                     run.font.size = Pt(9)
 
     # Add 5 empty rows if current items are less than 5 to maintain a consistent table height
-    # This might be needed if your template always shows a minimum number of rows
-    # For dynamic content, this can be skipped. Assuming template has fixed empty rows after items.
     num_existing_items = len(invoice_data['line_items'])
-    min_rows_to_show = 5 # Or whatever your template's minimum is
+    min_rows_to_show = 5
     if num_existing_items < min_rows_to_show:
         for _ in range(min_rows_to_show - num_existing_items):
             row_cells = item_table.add_row().cells
@@ -214,17 +209,16 @@ def generate_invoice_docx(invoice_data):
 
 
     # --- Summary Section (Subtotal, VAT, Grand Total) ---
-    # This table is typically positioned to align its right edge with the line items table
     summary_table = document.add_table(rows=3, cols=2)
     summary_table.autofit = False
     summary_table.allow_autofit = False
 
     # Calculate required width for the first column to align right
-    # Total width of line item table = sum of its column widths = 1.2+7.8+2.2+1.2+1.2+2.2+1.2 = 17cm
-    # Width of Total Price + BHD columns = 2.2 + 1.2 = 3.4cm
-    # So, first column of summary table should be (17 - 3.4) = 13.6cm to align
-    summary_table.columns[0].width = Cm(13.6) # Label column (Subtotal:, VAT @ 10%:, Grand Total:)
-    summary_table.columns[1].width = Cm(3.4)  # Value column (Amounts)
+    # Total width of line item table = 16.5cm
+    # Width of Total Price + BHD columns in item_table = 2.1 + 1.2 = 3.3cm
+    # So, first column of summary table should be (16.5 - 3.3) = 13.2cm to align
+    summary_table.columns[0].width = Cm(13.2) # Label column (Subtotal:, VAT @ 10%:, Grand Total:)
+    summary_table.columns[1].width = Cm(3.3)  # Value column (Amounts)
 
     # Ensure no borders for summary table cells, as per typical invoice design.
     for row in summary_table.rows:
@@ -236,8 +230,8 @@ def generate_invoice_docx(invoice_data):
     subtotal_cell_label = summary_table.rows[0].cells[0]
     subtotal_cell_label.text = "Subtotal:"
     subtotal_cell_label.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    subtotal_cell_label.paragraphs[0].paragraph_format.space_before = Pt(6) # Add small space before
-    subtotal_cell_label.paragraphs[0].paragraph_format.space_after = Pt(6) # Add small space after
+    subtotal_cell_label.paragraphs[0].paragraph_format.space_before = Pt(6)
+    subtotal_cell_label.paragraphs[0].paragraph_format.space_after = Pt(6)
 
     subtotal_cell_value = summary_table.rows[0].cells[1]
     subtotal_cell_value.text = f"{invoice_data['subtotal']:.3f} BHD"
@@ -262,8 +256,8 @@ def generate_invoice_docx(invoice_data):
     grand_total_cell_label = summary_table.rows[2].cells[0]
     grand_total_cell_label.text = "Grand Total in BHD"
     grand_total_cell_label.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    grand_total_cell_label.paragraphs[0].paragraph_format.space_before = Pt(12) # More space before grand total
-    grand_total_cell_label.paragraphs[0].paragraph_format.space_after = Pt(12) # More space after grand total
+    grand_total_cell_label.paragraphs[0].paragraph_format.space_before = Pt(12)
+    grand_total_cell_label.paragraphs[0].paragraph_format.space_after = Pt(12)
 
 
     grand_total_cell_value = summary_table.rows[2].cells[1]
@@ -277,7 +271,7 @@ def generate_invoice_docx(invoice_data):
         for run in p.runs:
             run.font.name = 'Arial'
             run.bold = True
-            run.font.size = Pt(12) # Larger font
+            run.font.size = Pt(12)
 
     for p in grand_total_cell_value.paragraphs:
         for run in p.runs:
@@ -286,7 +280,7 @@ def generate_invoice_docx(invoice_data):
             run.font.size = Pt(12)
             run.font.color.rgb = RGBColor(0, 0, 0) # Black color
 
-    document.add_paragraph().paragraph_format.space_after = Pt(20) # More space after summary
+    document.add_paragraph().paragraph_format.space_after = Pt(20)
 
     # --- Payment Details (Static Text) ---
     payment_details_para = document.add_paragraph()
@@ -301,9 +295,9 @@ def generate_invoice_docx(invoice_data):
     # --- Terms and Conditions ---
     terms_heading = document.add_paragraph('Terms and Conditions')
     terms_heading.runs[0].bold = True
-    terms_heading.runs[0].font.size = Pt(11) # Slightly smaller heading
+    terms_heading.runs[0].font.size = Pt(11)
     terms_heading.runs[0].font.name = 'Arial'
-    terms_heading.paragraph_format.space_after = Pt(6) # Small space after heading
+    terms_heading.paragraph_format.space_after = Pt(6)
 
     terms_para1 = document.add_paragraph()
     terms_para1.add_run("Payment terms: ").bold = True
@@ -324,19 +318,17 @@ def generate_invoice_docx(invoice_data):
     for run in terms_para3.runs:
         run.font.name = 'Arial'
         run.font.size = Pt(9)
-    terms_para3.paragraph_format.space_after = Pt(20) # More space after terms
+    terms_para3.paragraph_format.space_after = Pt(20)
 
     # --- Receipt/Acknowledgement ---
-    document.add_paragraph("Received by").paragraph_format.space_after = Pt(40) # Add significant space after 'Received by'
+    document.add_paragraph("Received by").paragraph_format.space_after = Pt(40)
 
     # Create a 3-column table for Name, Date, Signature alignment
     ack_signature_table = document.add_table(rows=1, cols=3)
     ack_signature_table.autofit = False
     ack_signature_table.allow_autofit = False
 
-    # Set widths to spread them out appropriately across the page
-    # Total content width approx 18cm. Divide equally.
-    col_width_ack = Cm(18.0 / 3) # Roughly 6cm per column
+    col_width_ack = Cm(18.0 / 3) # Roughly 6cm per column - should still fit
     ack_signature_table.columns[0].width = col_width_ack
     ack_signature_table.columns[1].width = col_width_ack
     ack_signature_table.columns[2].width = col_width_ack
@@ -352,7 +344,7 @@ def generate_invoice_docx(invoice_data):
     # Name column
     ack_name_para = ack_cells[0].paragraphs[0]
     ack_name_para.add_run("(Name)").font.name = 'Arial'
-    ack_name_para.add_run("\n").add_underline = True # Add underline for the line
+    ack_name_para.add_run("\n").add_underline = True
     ack_name_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
     for run in ack_name_para.runs:
         run.font.size = Pt(9)
@@ -386,9 +378,8 @@ def generate_invoice_docx(invoice_data):
     for para in [doc_para_company, doc_para_name, doc_para_title]:
         for run in para.runs:
             run.font.name = 'Arial'
-            run.font.size = Pt(10) # Standard size for final contact
-        # Reduce space after for these lines to be closer
-        para.paragraph_format.space_after = Pt(3) # Small space between lines
+            run.font.size = Pt(10)
+        para.paragraph_format.space_after = Pt(3)
 
 
     # Save the document to an in-memory byte stream
@@ -573,13 +564,3 @@ if 'invoice_data_ready' in st.session_state and st.session_state.invoice_data_re
         )
         st.success("Word document generated and ready for download!")
         st.info("PDF generation requires external libraries/tools for exact formatting. We can explore options for this next if the Word document is satisfactory.")
-# --- Download button (remains here as well for initial setup, but activated by logic above) ---
-# This part of the download button logic is removed because the download button is now conditional
-# inside the "Generate & Download Word Document" block.
-# if 'generated_docx_data' in st.session_state and st.session_state.generated_docx_data is not None:
-#     st.download_button(
-#         label="Download Invoice (Word)",
-#         data=st.session_state.generated_docx_data,
-#         file_name=st.session_state.generated_docx_filename,
-#         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-#     )
