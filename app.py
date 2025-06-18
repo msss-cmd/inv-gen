@@ -11,7 +11,7 @@ import io # To handle file in memory
 # --- Streamlit Page Setup ---
 st.set_page_config(layout="wide", page_title="Invoice Generator")
 
-# --- Function to generate DOCX (will be filled in later) ---
+# --- Function to generate DOCX ---
 def generate_invoice_docx(invoice_data):
     document = Document()
 
@@ -174,7 +174,6 @@ if 'line_items' not in st.session_state:
 if st.button("Add New Item"):
     st.session_state.line_items.append({"description": "", "unit_price": 0.000, "quantity": 1, "total_price": 0.000})
 
-# Display and allow editing of existing line items
 total_subtotal = 0.000
 items_to_remove = []
 
@@ -195,10 +194,9 @@ for i, item in enumerate(st.session_state.line_items):
     if item_cols[3].button(f"Remove Item {i+1}", key=f"remove_{i}"):
         items_to_remove.append(i)
 
-# Remove items after iteration to avoid modifying list during iteration
 for i in sorted(items_to_remove, reverse=True):
     del st.session_state.line_items[i]
-if items_to_remove: # Rerun app if items were removed
+if items_to_remove:
     st.experimental_rerun()
 
 
@@ -221,16 +219,14 @@ with st.form("invoice_form"):
         sss_invoice_no = st.text_input("SSS Invoice No", f"SSS-{current_date_str}-001")
         customer_vat_no = st.text_input("Customer VAT No.", "VAT123456789")
 
-    # The line items themselves are managed outside the form, but their calculated totals are displayed here
     vat_rate = 0.10
     vat_amount = total_subtotal * vat_rate
     grand_total = total_subtotal + vat_amount
 
     st.subheader("Summary")
-    # Display calculated totals using markdown
     st.markdown(f"**Subtotal:** {total_subtotal:.3f} BHD")
     st.markdown(f"**VAT @ 10%:** {vat_amount:.3f} BHD")
-    st.markdown(f"## **Grand Total:** {grand_total:.3f} BHD") # Make Grand Total prominent
+    st.markdown(f"## **Grand Total:** {grand_total:.3f} BHD")
 
 
     st.subheader("Terms and Conditions")
@@ -239,9 +235,15 @@ with st.form("invoice_form"):
     # --- Submit Button for the Form ---
     submitted = st.form_submit_button("Generate Invoice")
 
+    # Store generated DOCX in session_state if form was submitted successfully
     if submitted:
         if not st.session_state.line_items:
             st.warning("Please add at least one line item to generate the invoice.")
+            # Clear any previously stored generated file
+            if 'generated_docx_data' in st.session_state:
+                del st.session_state.generated_docx_data
+            if 'generated_docx_filename' in st.session_state:
+                del st.session_state.generated_docx_filename
         else:
             invoice_data = {
                 "to_company": to_company,
@@ -262,12 +264,23 @@ with st.form("invoice_form"):
 
             st.success("Invoice data collected successfully! Generating document...")
 
-            docx_file = generate_invoice_docx(invoice_data)
-            st.download_button(
-                label="Download Invoice (Word)",
-                data=docx_file,
-                file_name=f"Invoice_{sss_invoice_no}.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            )
+            # Generate the DOCX file in memory
+            docx_file_bytes = generate_invoice_docx(invoice_data)
 
-            st.info("PDF generation requires external libraries/tools for exact formatting. We can explore options for this next if the Word document is satisfactory.")
+            # Store the generated file data and filename in session state
+            st.session_state.generated_docx_data = docx_file_bytes
+            st.session_state.generated_docx_filename = f"Invoice_{sss_invoice_no}.docx"
+
+
+# --- Download button (OUTSIDE the form, conditional on a generated file existing) ---
+if 'generated_docx_data' in st.session_state and st.session_state.generated_docx_data is not None:
+    st.download_button(
+        label="Download Invoice (Word)",
+        data=st.session_state.generated_docx_data,
+        file_name=st.session_state.generated_docx_filename,
+        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    st.info("PDF generation requires external libraries/tools for exact formatting. We can explore options for this next if the Word document is satisfactory.")
+    # You might want to clear the session state after download if you only want one download per generation
+    # del st.session_state.generated_docx_data
+    # del st.session_state.generated_docx_filename
