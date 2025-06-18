@@ -14,46 +14,29 @@ def set_cell_border(cell, **kwargs):
     Set cell border properties.
     Args:
         cell: The docx.table._Cell object.
-        kwargs: Keyword arguments for borders (top, bottom, left, right, start, end, insideH, insideV).
+        kwargs: Keyword arguments for borders (top, bottom, left, right).
                 Each value should be a dict with 'sz' (size in eighths of a point) and 'color' (RGBColor).
-    Example: set_cell_border(cell, top={'sz': 12, 'color': RGBColor(0, 0, 0)})
+                Example: set_cell_border(cell, top={'sz': 12, 'color': RGBColor(0, 0, 0)})
     """
     tcPr = cell._element.get_or_add_tcPr()
 
-    # Define border properties in shorthand for convenience
-    borders = {
-        'top': {'tag': 'w:topBdr', 'val': 'single'},
-        'bottom': {'tag': 'w:bottomBdr', 'val': 'single'},
-        'left': {'tag': 'w:leftBdr', 'val': 'single'},
-        'right': {'tag': 'w:rightBdr', 'val': 'single'},
-        'insideH': {'tag': 'w:insideH'}, # Horizontal internal borders for rows
-        'insideV': {'tag': 'w:insideV'}, # Vertical internal borders for columns
-    }
-
-    for border_name, default_props in borders.items():
+    for border_name in ['top', 'bottom', 'left', 'right']:
         if border_name in kwargs:
-            bdr = OxmlElement(default_props['tag'])
-            bdr.set(qn('w:val'), kwargs[border_name].get('val', default_props.get('val', 'single')))
-            bdr.set(qn('w:sz'), str(kwargs[border_name].get('sz', 12))) # Default 12 means 1.5pt (12/8)
+            bdr = OxmlElement(f'w:{border_name}Bdr')
+            bdr.set(qn('w:val'), kwargs[border_name].get('val', 'single'))
+            bdr.set(qn('w:sz'), str(kwargs[border_name].get('sz', 12))) # Default 1.5pt
             color_val = kwargs[border_name].get('color', RGBColor(0, 0, 0)) # Default black
             bdr.set(qn('w:color'), f'{color_val.rgb[0]:02X}{color_val.rgb[1]:02X}{color_val.rgb[2]:02X}')
             tcPr.append(bdr)
-        # If no specific border is given, ensure default borders are removed if not explicitly set by table style
-        else:
-            # This part is tricky. If you want *no* border, you need to set val='nil'
-            # But the default table style might already have borders.
-            # For simplicity, we'll only *add* borders if specified.
-            pass
-
 
 # --- Function to generate DOCX ---
 def generate_invoice_docx(invoice_data):
     document = Document()
 
-    # Set default document margins (adjust if your template has different margins)
+    # Set document margins (typically 1.27 cm / 0.5 inches or 1.5cm / 0.6 inches for a clean look)
     sections = document.sections
     for section in sections:
-        section.top_margin = Cm(1.5) # Approx 1.5cm or 0.6 inches
+        section.top_margin = Cm(1.5)
         section.bottom_margin = Cm(1.5)
         section.left_margin = Cm(1.5)
         section.right_margin = Cm(1.5)
@@ -62,118 +45,70 @@ def generate_invoice_docx(invoice_data):
     title = document.add_paragraph('TAX INVOICE/DELIVERY NOTE')
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run_title = title.runs[0]
-    run_title.font.name = 'Arial' # Assuming Arial or similar sans-serif font
+    run_title.font.name = 'Arial' # Common clean font
     run_title.bold = True
-    run_title.font.size = Pt(18) # Larger font for title
-
-    document.add_paragraph() # Add a blank line for spacing
+    run_title.font.size = Pt(16) # Slightly reduced from 18, check template
+    # Add spacing after title
+    title.paragraph_format.space_after = Pt(12)
 
     # --- Table for Contact and Invoice Details ---
-    # This section appears to be a two-column layout visually, with some fields left blank.
-    # We will create a 4-column table for flexibility and merge cells where necessary to match visual.
-    # No visible borders are typical for this section.
-    
-    # Create table with 4 columns
+    # This table typically has no visible borders
     header_info_table = document.add_table(rows=6, cols=4)
     header_info_table.autofit = False
-    header_info_table.allow_autofit = False # Disable autofit to control widths manually
+    header_info_table.allow_autofit = False
     
-    # Set preferred table style (e.g., no borders by default if you want to add them selectively)
-    # This might require creating a custom style in the document template or manually clearing all borders.
-    # For now, we'll ensure no explicit borders are set by python-docx on cells.
+    # Precise column widths for header table (adjust these by small increments if needed)
+    header_info_table.columns[0].width = Cm(3.0) # Labels like "To:", "Address:"
+    header_info_table.columns[1].width = Cm(6.5) # Values like Company Name, Address
+    header_info_table.columns[2].width = Cm(3.5) # Labels like "Date:", "SSS Invoice No:"
+    header_info_table.columns[3].width = Cm(5.0) # Values like Date, Invoice No
 
-    # Approximate column widths for the header table (adjust these precisely)
-    header_info_table.columns[0].width = Cm(2.5) # Label column (To:, Address:, etc.)
-    header_info_table.columns[1].width = Cm(7.0) # Value column (Company Name, Address)
-    header_info_table.columns[2].width = Cm(3.0) # Second Label column (Date:, SSS Invoice No:)
-    header_info_table.columns[3].width = Cm(6.5) # Second Value column (Date, Invoice No)
+    # Populate cells
+    data_rows = [
+        ["To:", invoice_data['to_company'], "Date:", invoice_data['invoice_date']],
+        ["Address:", invoice_data['customer_address'], "SSS Invoice No:", invoice_data['sss_invoice_no']],
+        ["Tel:", invoice_data['customer_tel'], "Customer VAT No.:", invoice_data['customer_vat_no']],
+        ["ATTN:", invoice_data['attn_person'], "", ""],
+        ["Email:", invoice_data['customer_email'], "", ""],
+        ["Customer PO#:", invoice_data['customer_po'], "", ""]
+    ]
 
-    # Row 1: To: / Date:
-    cell_row1_col0 = header_info_table.rows[0].cells[0]
-    cell_row1_col0.text = "To:"
-    cell_row1_col1 = header_info_table.rows[0].cells[1]
-    cell_row1_col1.text = invoice_data['to_company']
-    cell_row1_col2 = header_info_table.rows[0].cells[2]
-    cell_row1_col2.text = "Date:"
-    cell_row1_col3 = header_info_table.rows[0].cells[3]
-    cell_row1_col3.text = invoice_data['invoice_date']
-
-    # Row 2: Address: / SSS Invoice No:
-    cell_row2_col0 = header_info_table.rows[1].cells[0]
-    cell_row2_col0.text = "Address:"
-    cell_row2_col1 = header_info_table.rows[1].cells[1]
-    cell_row2_col1.text = invoice_data['customer_address']
-    cell_row2_col2 = header_info_table.rows[1].cells[2]
-    cell_row2_col2.text = "SSS Invoice No:"
-    cell_row2_col3 = header_info_table.rows[1].cells[3]
-    cell_row2_col3.text = invoice_data['sss_invoice_no']
-
-    # Row 3: Tel: / Customer VAT No.:
-    cell_row3_col0 = header_info_table.rows[2].cells[0]
-    cell_row3_col0.text = "Tel:"
-    cell_row3_col1 = header_info_table.rows[2].cells[1]
-    cell_row3_col1.text = invoice_data['customer_tel']
-    cell_row3_col2 = header_info_table.rows[2].cells[2]
-    cell_row3_col2.text = "Customer VAT No.:"
-    cell_row3_col3 = header_info_table.rows[2].cells[3]
-    cell_row3_col3.text = invoice_data['customer_vat_no']
-
-    # Row 4: ATTN: (Spans 2 columns on the right)
-    cell_row4_col0 = header_info_table.rows[3].cells[0]
-    cell_row4_col0.text = "ATTN:"
-    cell_row4_col1 = header_info_table.rows[3].cells[1]
-    cell_row4_col1.text = invoice_data['attn_person']
-    # Merge cells for empty space on the right for ATTN line
-    header_info_table.rows[3].cells[2].merge(header_info_table.rows[3].cells[3])
-
-    # Row 5: Email: (Spans 2 columns on the right)
-    cell_row5_col0 = header_info_table.rows[4].cells[0]
-    cell_row5_col0.text = "Email:"
-    cell_row5_col1 = header_info_table.rows[4].cells[1]
-    cell_row5_col1.text = invoice_data['customer_email']
-    # Merge cells for empty space on the right for Email line
-    header_info_table.rows[4].cells[2].merge(header_info_table.rows[4].cells[3])
-
-    # Row 6: Customer PO#: (Spans 2 columns on the right)
-    cell_row6_col0 = header_info_table.rows[5].cells[0]
-    cell_row6_col0.text = "Customer PO#:"
-    cell_row6_col1 = header_info_table.rows[5].cells[1]
-    cell_row6_col1.text = invoice_data['customer_po']
-    # Merge cells for empty space on the right for Customer PO# line
-    header_info_table.rows[5].cells[2].merge(header_info_table.rows[5].cells[3])
-
-    # Apply font formatting to all cells in the header info table
-    for row in header_info_table.rows:
-        for cell in row.cells:
+    for r_idx, row_data in enumerate(data_rows):
+        for c_idx, cell_text in enumerate(row_data):
+            cell = header_info_table.rows[r_idx].cells[c_idx]
+            cell.text = str(cell_text)
             for paragraph in cell.paragraphs:
                 for run in paragraph.runs:
-                    run.font.name = 'Arial' # Consistent font
-                    run.font.size = Pt(10) # Consistent font size
-                    # No borders for this table
-                    set_cell_border(cell, top={'sz': 0, 'val': 'nil'}, bottom={'sz': 0, 'val': 'nil'},
-                                    left={'sz': 0, 'val': 'nil'}, right={'sz': 0, 'val': 'nil'})
+                    run.font.name = 'Arial'
+                    run.font.size = Pt(9) # Standard text size for details
+            # Ensure no borders
+            set_cell_border(cell, top={'sz': 0, 'val': 'nil'}, bottom={'sz': 0, 'val': 'nil'},
+                                left={'sz': 0, 'val': 'nil'}, right={'sz': 0, 'val': 'nil'})
 
+    # Handle merges for the right-hand empty cells in ATTN, Email, PO# rows
+    header_info_table.rows[3].cells[2].merge(header_info_table.rows[3].cells[3])
+    header_info_table.rows[4].cells[2].merge(header_info_table.rows[4].cells[3])
+    header_info_table.rows[5].cells[2].merge(header_info_table.rows[5].cells[3])
 
-    document.add_paragraph() # Spacing after header table
+    # Add spacing after header info table
+    document.add_paragraph().paragraph_format.space_after = Pt(12)
 
     # --- Line Items Table ---
     item_table = document.add_table(rows=1, cols=7)
     item_table.autofit = False
     item_table.allow_autofit = False
 
-    # Set explicit column widths for line items table (crucial for exact layout)
-    # These widths are estimations; fine-tune them against your original DOCX
-    item_table.columns[0].width = Cm(1.0)  # No
-    item_table.columns[1].width = Cm(8.0)  # Description
-    item_table.columns[2].width = Cm(2.5)  # Unit price
-    item_table.columns[3].width = Cm(1.5)  # BHD (Unit)
-    item_table.columns[4].width = Cm(1.5)  # Qty
-    item_table.columns[5].width = Cm(2.5)  # Total price
-    item_table.columns[6].width = Cm(1.5)  # BHD (Total)
+    # Set precise column widths for line items table
+    item_table.columns[0].width = Cm(1.2)  # No
+    item_table.columns[1].width = Cm(7.8)  # Description (adjusted)
+    item_table.columns[2].width = Cm(2.2)  # Unit price (adjusted)
+    item_table.columns[3].width = Cm(1.2)  # BHD (Unit) (adjusted)
+    item_table.columns[4].width = Cm(1.2)  # Qty (adjusted)
+    item_table.columns[5].width = Cm(2.2)  # Total price (adjusted)
+    item_table.columns[6].width = Cm(1.2)  # BHD (Total) (adjusted)
 
-    # Set default table style to include all borders for line items
-    # You might need to adjust table.style to 'Table Grid' or manually add borders
-    item_table.style = 'Table Grid' # This usually adds all standard borders
+    # Apply 'Table Grid' style for standard borders
+    item_table.style = 'Table Grid'
 
     # Add header row
     item_table_headers = ["No", "Description", "Unit price", "BHD", "Qty", "Total price", "BHD"]
@@ -186,7 +121,7 @@ def generate_invoice_docx(invoice_data):
         if header_text in ["No", "Qty", "BHD"]:
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
         elif header_text in ["Unit price", "Total price"]:
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT # Right align price headers
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
         else:
             paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
@@ -195,8 +130,8 @@ def generate_invoice_docx(invoice_data):
             run.font.name = 'Arial'
             run.bold = True
             run.font.size = Pt(9)
-        # Apply light gray shading to header row cells
-        cell.shading.background = RGBColor(0xD9, 0xD9, 0xD9) # Light gray (hex #D9D9D9)
+        # Apply light gray shading to header row cells (D9D9D9 is a common light grey)
+        cell.shading.background = RGBColor(0xD9, 0xD9, 0xD9)
 
     # Add item rows
     for i, item in enumerate(invoice_data['line_items']):
@@ -237,29 +172,38 @@ def generate_invoice_docx(invoice_data):
                     run.font.name = 'Arial'
                     run.font.size = Pt(9)
 
-    # Add empty rows if needed to match min rows in template, otherwise dynamic.
-    # For now, we'll assume dynamic based on input.
+    # Add 5 empty rows if current items are less than 5 to maintain a consistent table height
+    # This might be needed if your template always shows a minimum number of rows
+    # For dynamic content, this can be skipped. Assuming template has fixed empty rows after items.
+    num_existing_items = len(invoice_data['line_items'])
+    min_rows_to_show = 5 # Or whatever your template's minimum is
+    if num_existing_items < min_rows_to_show:
+        for _ in range(min_rows_to_show - num_existing_items):
+            row_cells = item_table.add_row().cells
+            for cell in row_cells:
+                # Ensure empty cells also have borders and consistent font if typed into
+                set_cell_border(cell, top={'sz': 12}, bottom={'sz': 12},
+                                left={'sz': 12}, right={'sz': 12})
+                for paragraph in cell.paragraphs:
+                    for run in paragraph.runs:
+                        run.font.name = 'Arial'
+                        run.font.size = Pt(9)
+
 
     # --- Summary Section (Subtotal, VAT, Grand Total) ---
-    # This section appears to be a 2-column table that aligns with the right side of the main table.
+    # This table is typically positioned to align its right edge with the line items table
     summary_table = document.add_table(rows=3, cols=2)
     summary_table.autofit = False
     summary_table.allow_autofit = False
 
-    # Adjust summary table position using left indent for table (requires more advanced XML manipulation)
-    # Or, the simpler way is to align its left edge with the 'Unit Price' column of the main table
-    # by setting its first column to be very wide (approx. item_table.columns[0] to item_table.columns[4] widths summed)
-    # Total width of item table is approx Cm(1.0 + 8.0 + 2.5 + 1.5 + 1.5 + 2.5 + 1.5) = 18.5 cm
-    # Summary starts visually after description, maybe 8.0 + 1.0 + 2.5 = 11.5cm from left edge?
-    # Let's align its right edge.
-    # Total document width (after margins) approx 21cm - 3cm = 18cm.
-    # Right column widths for prices are 2.5 + 1.5 = 4cm.
-    # So left column width for summary table = (18cm - 4cm) = 14cm approx.
+    # Calculate required width for the first column to align right
+    # Total width of line item table = sum of its column widths = 1.2+7.8+2.2+1.2+1.2+2.2+1.2 = 17cm
+    # Width of Total Price + BHD columns = 2.2 + 1.2 = 3.4cm
+    # So, first column of summary table should be (17 - 3.4) = 13.6cm to align
+    summary_table.columns[0].width = Cm(13.6) # Label column (Subtotal:, VAT @ 10%:, Grand Total:)
+    summary_table.columns[1].width = Cm(3.4)  # Value column (Amounts)
 
-    summary_table.columns[0].width = Cm(14.0) # Label column (Subtotal:, VAT @ 10%:, Grand Total:)
-    summary_table.columns[1].width = Cm(4.0)  # Value column (Amounts)
-
-    # Remove all borders for summary table cells, as per typical invoice design.
+    # Ensure no borders for summary table cells, as per typical invoice design.
     for row in summary_table.rows:
         for cell in row.cells:
             set_cell_border(cell, top={'sz': 0, 'val': 'nil'}, bottom={'sz': 0, 'val': 'nil'},
@@ -269,44 +213,57 @@ def generate_invoice_docx(invoice_data):
     subtotal_cell_label = summary_table.rows[0].cells[0]
     subtotal_cell_label.text = "Subtotal:"
     subtotal_cell_label.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    subtotal_cell_label.paragraphs[0].paragraph_format.space_before = Pt(6) # Add small space before
+    subtotal_cell_label.paragraphs[0].paragraph_format.space_after = Pt(6) # Add small space after
 
     subtotal_cell_value = summary_table.rows[0].cells[1]
     subtotal_cell_value.text = f"{invoice_data['subtotal']:.3f} BHD"
     subtotal_cell_value.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    subtotal_cell_value.paragraphs[0].paragraph_format.space_before = Pt(6)
+    subtotal_cell_value.paragraphs[0].paragraph_format.space_after = Pt(6)
 
     # Row 2: VAT
     vat_cell_label = summary_table.rows[1].cells[0]
     vat_cell_label.text = "VAT @ 10%:"
     vat_cell_label.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    vat_cell_label.paragraphs[0].paragraph_format.space_before = Pt(6)
+    vat_cell_label.paragraphs[0].paragraph_format.space_after = Pt(6)
 
     vat_cell_value = summary_table.rows[1].cells[1]
     vat_cell_value.text = f"{invoice_data['vat_amount']:.3f} BHD"
     vat_cell_value.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    vat_cell_value.paragraphs[0].paragraph_format.space_before = Pt(6)
+    vat_cell_value.paragraphs[0].paragraph_format.space_after = Pt(6)
 
     # Row 3: Grand Total
     grand_total_cell_label = summary_table.rows[2].cells[0]
     grand_total_cell_label.text = "Grand Total in BHD"
     grand_total_cell_label.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    grand_total_cell_label.paragraphs[0].paragraph_format.space_before = Pt(12) # More space before grand total
+    grand_total_cell_label.paragraphs[0].paragraph_format.space_after = Pt(12) # More space after grand total
+
 
     grand_total_cell_value = summary_table.rows[2].cells[1]
     grand_total_cell_value.text = f"{invoice_data['grand_total']:.3f} BHD"
     grand_total_cell_value.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    grand_total_cell_value.paragraphs[0].paragraph_format.space_before = Pt(12)
+    grand_total_cell_value.paragraphs[0].paragraph_format.space_after = Pt(12)
 
-    # Apply bold and potentially larger font size for Grand Total
+    # Apply bold and larger font size for Grand Total
     for p in grand_total_cell_label.paragraphs:
         for run in p.runs:
             run.font.name = 'Arial'
             run.bold = True
-            run.font.size = Pt(11) # Slightly larger
+            run.font.size = Pt(12) # Larger font
 
     for p in grand_total_cell_value.paragraphs:
         for run in p.runs:
             run.font.name = 'Arial'
             run.bold = True
-            run.font.size = Pt(11)
-            run.font.color.rgb = RGBColor(0, 0, 0) # Black color for consistency
+            run.font.size = Pt(12)
+            run.font.color.rgb = RGBColor(0, 0, 0) # Black color
 
-    document.add_paragraph() # Add some space after summary
+    document.add_paragraph().paragraph_format.space_after = Pt(20) # More space after summary
 
     # --- Payment Details (Static Text) ---
     payment_details_para = document.add_paragraph()
@@ -316,14 +273,14 @@ def generate_invoice_docx(invoice_data):
     payment_details_para.add_run("\nAddress: Arab Bank Plc. , P.O Box: 395, Manama, Kingdom of Bahrain.").font.name = 'Arial'
     for run in payment_details_para.runs:
         run.font.size = Pt(9)
-
-    document.add_paragraph() # Spacing
+    payment_details_para.paragraph_format.space_after = Pt(20)
 
     # --- Terms and Conditions ---
     terms_heading = document.add_paragraph('Terms and Conditions')
     terms_heading.runs[0].bold = True
-    terms_heading.runs[0].font.size = Pt(12)
+    terms_heading.runs[0].font.size = Pt(11) # Slightly smaller heading
     terms_heading.runs[0].font.name = 'Arial'
+    terms_heading.paragraph_format.space_after = Pt(6) # Small space after heading
 
     terms_para1 = document.add_paragraph()
     terms_para1.add_run("Payment terms: ").bold = True
@@ -331,63 +288,85 @@ def generate_invoice_docx(invoice_data):
     for run in terms_para1.runs:
         run.font.name = 'Arial'
         run.font.size = Pt(9)
+    terms_para1.paragraph_format.space_after = Pt(6)
 
     terms_para2 = document.add_paragraph("Title and property at all above remain ours until full payment is received and we reserve the rights to withdraw goods/services if not paid for when due.")
     for run in terms_para2.runs:
         run.font.name = 'Arial'
         run.font.size = Pt(9)
+    terms_para2.paragraph_format.space_after = Pt(6)
+
 
     terms_para3 = document.add_paragraph("Signing this document implies acceptance of these terms.")
     for run in terms_para3.runs:
         run.font.name = 'Arial'
         run.font.size = Pt(9)
-
-    document.add_paragraph() # Spacing
+    terms_para3.paragraph_format.space_after = Pt(20) # More space after terms
 
     # --- Receipt/Acknowledgement ---
-    # Using a table for precise alignment of (Name), (Date), (Signature)
-    ack_table = document.add_table(rows=1, cols=3)
-    ack_table.autofit = False
-    ack_table.allow_autofit = False
+    document.add_paragraph("Received by").paragraph_format.space_after = Pt(40) # Add significant space after 'Received by'
 
-    # Set widths to spread them out appropriately
-    ack_table.columns[0].width = Cm(6) # Name
-    ack_table.columns[1].width = Cm(6) # Date
-    ack_table.columns[2].width = Cm(6) # Signature
+    # Create a 3-column table for Name, Date, Signature alignment
+    ack_signature_table = document.add_table(rows=1, cols=3)
+    ack_signature_table.autofit = False
+    ack_signature_table.allow_autofit = False
 
-    # No borders for this table
-    for row in ack_table.rows:
+    # Set widths to spread them out appropriately across the page
+    # Total content width approx 18cm. Divide equally.
+    col_width_ack = Cm(18.0 / 3) # Roughly 6cm per column
+    ack_signature_table.columns[0].width = col_width_ack
+    ack_signature_table.columns[1].width = col_width_ack
+    ack_signature_table.columns[2].width = col_width_ack
+
+    # Remove all borders for this table
+    for row in ack_signature_table.rows:
         for cell in row.cells:
             set_cell_border(cell, top={'sz': 0, 'val': 'nil'}, bottom={'sz': 0, 'val': 'nil'},
                                 left={'sz': 0, 'val': 'nil'}, right={'sz': 0, 'val': 'nil'})
 
-    ack_cells = ack_table.rows[0].cells
-    ack_cells[0].text = "(Name)"
-    ack_cells[1].text = "(Date)"
-    ack_cells[2].text = "(Signature)"
+    ack_cells = ack_signature_table.rows[0].cells
+    
+    # Name column
+    ack_name_para = ack_cells[0].paragraphs[0]
+    ack_name_para.add_run("(Name)").font.name = 'Arial'
+    ack_name_para.add_run("\n").add_underline = True # Add underline for the line
+    ack_name_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    for run in ack_name_para.runs:
+        run.font.size = Pt(9)
 
-    for cell in ack_cells:
-        cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-        for run in cell.paragraphs[0].runs:
-            run.font.name = 'Arial'
-            run.font.size = Pt(9)
-            # Add a bottom border only for the signature line underneath the text
-            # This is more complex and typically done by drawing shapes or using specific paragraph borders.
-            # For simplicity, if your template shows a line, you might add a bottom border to the cell,
-            # or rely on the user visually interpreting the text placement.
-            # A simpler way to get a line is to use an underscore _ within the text, but that's not ideal.
+    # Date column
+    ack_date_para = ack_cells[1].paragraphs[0]
+    ack_date_para.add_run("(Date)").font.name = 'Arial'
+    ack_date_para.add_run("\n").add_underline = True
+    ack_date_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    for run in ack_date_para.runs:
+        run.font.size = Pt(9)
+
+    # Signature column
+    ack_sig_para = ack_cells[2].paragraphs[0]
+    ack_sig_para.add_run("(Signature)").font.name = 'Arial'
+    ack_sig_para.add_run("\n").add_underline = True
+    ack_sig_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    for run in ack_sig_para.runs:
+        run.font.size = Pt(9)
+
+    # Add a blank paragraph for vertical spacing after the signature lines
+    document.add_paragraph().paragraph_format.space_after = Pt(20)
 
 
-    document.add_paragraph() # Spacing after the ack_table
+    # Final company details
+    doc_para_company = document.add_paragraph("For SALAHUDDIN SOFTTECH SOLUTIONS")
+    doc_para_name = document.add_paragraph("Jobin George")
+    doc_para_title = document.add_paragraph("Operations Manager")
 
-    document.add_paragraph("For SALAHUDDIN SOFTTECH SOLUTIONS")
-    document.add_paragraph("Jobin George")
-    document.add_paragraph("Operations Manager")
-    # Apply font formatting to these last three paragraphs
-    for para in document.paragraphs[-3:]: # Get the last 3 paragraphs
+    # Apply font formatting to these final paragraphs
+    for para in [doc_para_company, doc_para_name, doc_para_title]:
         for run in para.runs:
             run.font.name = 'Arial'
-            run.font.size = Pt(10) # Adjust size if needed
+            run.font.size = Pt(10) # Standard size for final contact
+        # Reduce space after for these lines to be closer
+        para.paragraph_format.space_after = Pt(3) # Small space between lines
+
 
     # Save the document to an in-memory byte stream
     byte_io = io.BytesIO()
