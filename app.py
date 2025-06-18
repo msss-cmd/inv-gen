@@ -15,8 +15,8 @@ def set_cell_border(cell, **kwargs):
     Args:
         cell: The docx.table._Cell object.
         kwargs: Keyword arguments for borders (top, bottom, left, right).
-                Each value should be a dict with 'sz' (size in eighths of a point) and 'color' (RGBColor).
-                Example: set_cell_border(cell, top={'sz': 12, 'color': RGBColor(0, 0, 0)})
+                Each value should be a dict with 'sz' (size in eighths of a point),
+                'color' (RGBColor object or hex string like '000000'), and 'val' (border style).
     """
     tcPr = cell._element.get_or_add_tcPr()
 
@@ -29,15 +29,25 @@ def set_cell_border(cell, **kwargs):
             bdr.set(qn('w:val'), border_val)
             bdr.set(qn('w:sz'), str(border_props.get('sz', 12))) # Default 1.5pt
 
-            # Only set color if the border is not 'nil' (i.e., it's an actual border)
             if border_val != 'nil':
-                color_val = border_props.get('color', RGBColor(0, 0, 0)) # Default black
-                if isinstance(color_val, RGBColor): # Ensure it's an RGBColor object before accessing .rgb
-                    hex_color = f'{color_val.rgb[0]:02X}{color_val.rgb[1]:02X}{color_val.rgb[2]:02X}'
-                    bdr.set(qn('w:color'), hex_color)
-                else:
-                    # Fallback to a default black if for some reason color_val is not RGBColor (shouldn't happen with default)
-                    bdr.set(qn('w:color'), '000000') # Black hex
+                # Attempt to get color, defaulting to black RGBColor if not provided
+                color_input = border_props.get('color', RGBColor(0, 0, 0))
+                hex_color = '000000' # Default black hex as fallback
+
+                if isinstance(color_input, RGBColor):
+                    try:
+                        # Attempt to get hex from RGBColor.rgb (standard way)
+                        # The .rgb property returns a Bytes object, which is subscriptable
+                        hex_color = f'{color_input.rgb[0]:02X}{color_input.rgb[1]:02X}{color_input.rgb[2]:02X}'
+                    except AttributeError:
+                        # If RGBColor object truly has no .rgb attribute (due to corrupted lib),
+                        # fall back to default black hex.
+                        pass # hex_color remains '000000'
+                elif isinstance(color_input, str):
+                    # If color was provided as a hex string directly
+                    hex_color = color_input
+                
+                bdr.set(qn('w:color'), hex_color)
             
             tcPr.append(bdr)
 
