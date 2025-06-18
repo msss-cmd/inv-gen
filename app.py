@@ -2,8 +2,8 @@ import streamlit as st
 import datetime
 from docx import Document
 from docx.shared import Inches, Pt, Cm, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.table import WD_ALIGN_VERTICAL, WD_SHADING # <-- Corrected import for shading (from table enum)
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_SHADING # <-- Changed import for WD_SHADING back to docx.enum.text
+from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement # For setting table cell borders
 import io # To handle file in memory
