@@ -397,7 +397,7 @@ def generate_invoice_docx(invoice_data):
     byte_io.seek(0)
     return byte_io
 
-# --- Streamlit Form Layout (Remains the same as previous corrected version) ---
+# --- Streamlit Form Layout ---
 st.title("Invoice Generator")
 
 st.subheader("Line Items")
@@ -405,10 +405,14 @@ st.subheader("Line Items")
 # Initialize line_items in session_state if not present
 if 'line_items' not in st.session_state:
     st.session_state.line_items = []
+if 'invoice_data_ready' not in st.session_state:
+    st.session_state.invoice_data_ready = False # Flag to control preview visibility
 
 # Buttons to add/remove items (OUTSIDE the form)
 if st.button("Add New Item"):
     st.session_state.line_items.append({"description": "", "unit_price": 0.000, "quantity": 1, "total_price": 0.000})
+    st.session_state.invoice_data_ready = False # Hide preview if items change
+    st.session_state.generated_docx_data = None # Clear generated docx
 
 total_subtotal = 0.000
 items_to_remove = []
@@ -429,6 +433,9 @@ for i, item in enumerate(st.session_state.line_items):
     st.text(f"Total Price for Item {i+1}: {item['total_price']:.3f} BHD")
     if item_cols[3].button(f"Remove Item {i+1}", key=f"remove_{i}"):
         items_to_remove.append(i)
+        st.session_state.invoice_data_ready = False # Hide preview if items change
+        st.session_state.generated_docx_data = None # Clear generated docx
+
 
 for i in sorted(items_to_remove, reverse=True):
     del st.session_state.line_items[i]
@@ -469,15 +476,15 @@ with st.form("invoice_form"):
     payment_terms = st.text_area("Payment terms", "30 days from invoice date")
 
     # --- Submit Button for the Form ---
-    submitted = st.form_submit_button("Generate Invoice")
+    submitted = st.form_submit_button("Generate Invoice Preview") # Renamed button
 
     if submitted:
         if not st.session_state.line_items:
             st.warning("Please add at least one line item to generate the invoice.")
-            if 'generated_docx_data' in st.session_state:
-                del st.session_state.generated_docx_data
-            if 'generated_docx_filename' in st.session_state:
-                del st.session_state.generated_docx_filename
+            # Clear existing generated data if any
+            st.session_state.invoice_data_ready = False
+            st.session_state.generated_docx_data = None
+            st.session_state.generated_docx_filename = None
         else:
             invoice_data = {
                 "to_company": to_company,
@@ -496,20 +503,83 @@ with st.form("invoice_form"):
                 "payment_terms": payment_terms
             }
 
-            st.success("Invoice data collected successfully! Generating document...")
+            st.success("Invoice data collected successfully! Displaying preview...")
 
-            docx_file_bytes = generate_invoice_docx(invoice_data)
+            # Store invoice_data in session_state to be accessible for preview and download
+            st.session_state.invoice_data_for_preview = invoice_data
+            st.session_state.invoice_data_ready = True # Flag to show preview section
+            st.session_state.generated_docx_data = None # Clear previously generated docx on new preview generation
 
-            st.session_state.generated_docx_data = docx_file_bytes
-            st.session_state.generated_docx_filename = f"Invoice_{sss_invoice_no}.docx"
+# --- Invoice Preview Section (appears if invoice_data is ready) ---
+if 'invoice_data_ready' in st.session_state and st.session_state.invoice_data_ready:
+    st.markdown("---")
+    st.subheader("Invoice Preview")
+    preview_data = st.session_state.invoice_data_for_preview
 
+    st.markdown(f"### **TAX INVOICE/DELIVERY NOTE**")
+    st.markdown("---")
+    st.markdown(f"**To:** {preview_data['to_company']} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; **Date:** {preview_data['invoice_date']}")
+    st.markdown(f"**Address:** {preview_data['customer_address']} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; **SSS Invoice No:** {preview_data['sss_invoice_no']}")
+    st.markdown(f"**Tel:** {preview_data['customer_tel']} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; **Customer VAT No.:** {preview_data['customer_vat_no']}")
+    st.markdown(f"**ATTN:** {preview_data['attn_person']}")
+    st.markdown(f"**Email:** {preview_data['customer_email']}")
+    st.markdown(f"**Customer PO#:** {preview_data['customer_po']}")
+    st.markdown("---")
 
-# --- Download button (OUTSIDE the form, conditional on a generated file existing) ---
-if 'generated_docx_data' in st.session_state and st.session_state.generated_docx_data is not None:
-    st.download_button(
-        label="Download Invoice (Word)",
-        data=st.session_state.generated_docx_data,
-        file_name=st.session_state.generated_docx_filename,
-        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )
-    st.info("PDF generation requires external libraries/tools for exact formatting. We can explore options for this next if the Word document is satisfactory.")
+    st.markdown("### Line Items:")
+    # Create a simple table for line items in markdown
+    line_item_table_md = "| No | Description | Unit Price | Qty | Total Price |\n|---|---|---|---|---|\n"
+    for i, item in enumerate(preview_data['line_items']):
+        line_item_table_md += f"| {i+1} | {item['description']} | {item['unit_price']:.3f} BHD | {item['quantity']} | {item['total_price']:.3f} BHD |\n"
+    st.markdown(line_item_table_md)
+    st.markdown("---")
+
+    st.markdown(f"**Subtotal:** {preview_data['subtotal']:.3f} BHD")
+    st.markdown(f"**VAT @ 10%:** {preview_data['vat_amount']:.3f} BHD")
+    st.markdown(f"## **Grand Total:** {preview_data['grand_total']:.3f} BHD")
+    st.markdown("---")
+
+    st.markdown("### Terms and Conditions")
+    st.markdown(f"**Payment terms:** {preview_data['payment_terms']}")
+    st.markdown("Title and property at all above remain ours until full payment is received and we reserve the rights to withdraw goods/services if not paid for when due.")
+    st.markdown("Signing this document implies acceptance of these terms.")
+    st.markdown("---")
+    st.markdown("Received by")
+    # Using non-breaking spaces for basic alignment in markdown
+    st.markdown("\n\n(Name) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; (Date) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; (Signature)")
+    st.markdown("---")
+    st.markdown("For SALAHUDDIN SOFTTECH SOLUTIONS")
+    st.markdown("Jobin George")
+    st.markdown("Operations Manager")
+
+    st.write("---")
+    st.subheader("Generate & Download Document")
+
+    # Only generate DOCX when download button is clicked to avoid re-generating on every rerun
+    if st.button("Generate & Download Word Document"):
+        docx_file_bytes = generate_invoice_docx(preview_data) # Use the data from session_state
+
+        st.session_state.generated_docx_data = docx_file_bytes
+        st.session_state.generated_docx_filename = f"Invoice_{preview_data['sss_invoice_no']}.docx" # Use the SSS Invoice No from preview data
+
+        # This download button must be defined AFTER its data is set,
+        # and only appears after the "Generate & Download" button is clicked.
+        st.download_button(
+            label="Click here to Download Invoice (Word)", # Changed label to indicate it's ready
+            data=st.session_state.generated_docx_data,
+            file_name=st.session_state.generated_docx_filename,
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            key="final_download_button" # Unique key for this download button
+        )
+        st.success("Word document generated and ready for download!")
+        st.info("PDF generation requires external libraries/tools for exact formatting. We can explore options for this next if the Word document is satisfactory.")
+# --- Download button (remains here as well for initial setup, but activated by logic above) ---
+# This part of the download button logic is removed because the download button is now conditional
+# inside the "Generate & Download Word Document" block.
+# if 'generated_docx_data' in st.session_state and st.session_state.generated_docx_data is not None:
+#     st.download_button(
+#         label="Download Invoice (Word)",
+#         data=st.session_state.generated_docx_data,
+#         file_name=st.session_state.generated_docx_filename,
+#         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+#     )
