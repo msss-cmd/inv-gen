@@ -2,7 +2,7 @@ import streamlit as st
 import datetime
 from docx import Document
 from docx.shared import Inches, Pt, Cm, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_SHADING # <-- Changed import for WD_SHADING back to docx.enum.text
+from docx.enum.text import WD_ALIGN_PARAGRAPH # WD_SHADING removed to resolve import error
 from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement # For setting table cell borders
@@ -142,9 +142,9 @@ def generate_invoice_docx(invoice_data):
             run.font.name = 'Arial'
             run.bold = True
             run.font.size = Pt(9)
-        # Apply light gray shading to header row cells (D9D9D9 is a common light grey)
-        cell.shading.fill = WD_SHADING.TEXTURE_NONE
-        cell.shading.foreground = RGBColor(0xD9, 0xD9, 0xD9)
+        # Removed shading application to resolve persistent import error
+        # cell.shading.fill = WD_SHADING.TEXTURE_NONE
+        # cell.shading.foreground = RGBColor(0xD9, 0xD9, 0xD9)
 
     # Add item rows
     for i, item in enumerate(invoice_data['line_items']):
