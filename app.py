@@ -4,6 +4,7 @@ from docx import Document
 from docx.shared import Inches, Pt, Cm, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_ALIGN_VERTICAL
+from docx.enum.shading import WD_SHADING # <-- New import for shading
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement # For setting table cell borders
 import io # To handle file in memory
@@ -143,7 +144,8 @@ def generate_invoice_docx(invoice_data):
             run.bold = True
             run.font.size = Pt(9)
         # Apply light gray shading to header row cells (D9D9D9 is a common light grey)
-        cell.shading.background = RGBColor(0xD9, 0xD9, 0xD9)
+        cell.shading.fill = WD_SHADING.TEXTURE_NONE # <-- Corrected line
+        cell.shading.foreground = RGBColor(0xD9, 0xD9, 0xD9) # <-- Corrected line
 
     # Add item rows
     for i, item in enumerate(invoice_data['line_items']):
