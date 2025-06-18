@@ -79,7 +79,7 @@ def generate_invoice_docx(invoice_data):
     header_info_table.autofit = False
     header_info_table.allow_autofit = False
     
-    # Precise column widths for header table (ADJUSTED FOR FIT)
+    # Precise column widths for header table (ADJUSTED PREVIOUSLY - KEPT SAME)
     header_info_table.columns[0].width = Cm(2.8) # Labels like "To:", "Address:"
     header_info_table.columns[1].width = Cm(6.3) # Values like Company Name, Address
     header_info_table.columns[2].width = Cm(3.4) # Labels like "Date:", "SSS Invoice No:"
@@ -120,13 +120,13 @@ def generate_invoice_docx(invoice_data):
     item_table.autofit = False
     item_table.allow_autofit = False
 
-    # Set precise column widths for line items table (ADJUSTED FOR FIT)
+    # Set precise column widths for line items table (FURTHER ADJUSTED FOR FIT)
     item_table.columns[0].width = Cm(1.2)  # No
-    item_table.columns[1].width = Cm(7.5)  # Description
-    item_table.columns[2].width = Cm(2.1)  # Unit price
+    item_table.columns[1].width = Cm(7.0)  # Description (FURTHER REDUCED)
+    item_table.columns[2].width = Cm(2.0)  # Unit price (FURTHER REDUCED)
     item_table.columns[3].width = Cm(1.2)  # BHD (Unit)
     item_table.columns[4].width = Cm(1.2)  # Qty
-    item_table.columns[5].width = Cm(2.1)  # Total price
+    item_table.columns[5].width = Cm(2.0)  # Total price (FURTHER REDUCED)
     item_table.columns[6].width = Cm(1.2)  # BHD (Total)
 
     # Apply 'Table Grid' style for standard borders
@@ -214,11 +214,11 @@ def generate_invoice_docx(invoice_data):
     summary_table.allow_autofit = False
 
     # Calculate required width for the first column to align right
-    # Total width of line item table = 16.5cm
-    # Width of Total Price + BHD columns in item_table = 2.1 + 1.2 = 3.3cm
-    # So, first column of summary table should be (16.5 - 3.3) = 13.2cm to align
-    summary_table.columns[0].width = Cm(13.2) # Label column (Subtotal:, VAT @ 10%:, Grand Total:)
-    summary_table.columns[1].width = Cm(3.3)  # Value column (Amounts)
+    # Total width of line item table = 15.8cm
+    # Width of Total Price + BHD columns in item_table = 2.0 + 1.2 = 3.2cm
+    # So, first column of summary table should be (15.8 - 3.2) = 12.6cm to align
+    summary_table.columns[0].width = Cm(12.6) # Label column (Subtotal:, VAT @ 10%:, Grand Total:)
+    summary_table.columns[1].width = Cm(3.2)  # Value column (Amounts)
 
     # Ensure no borders for summary table cells, as per typical invoice design.
     for row in summary_table.rows:
