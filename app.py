@@ -22,11 +22,23 @@ def set_cell_border(cell, **kwargs):
 
     for border_name in ['top', 'bottom', 'left', 'right']:
         if border_name in kwargs:
+            border_props = kwargs[border_name]
             bdr = OxmlElement(f'w:{border_name}Bdr')
-            bdr.set(qn('w:val'), kwargs[border_name].get('val', 'single'))
-            bdr.set(qn('w:sz'), str(kwargs[border_name].get('sz', 12))) # Default 1.5pt
-            color_val = kwargs[border_name].get('color', RGBColor(0, 0, 0)) # Default black
-            bdr.set(qn('w:color'), f'{color_val.rgb[0]:02X}{color_val.rgb[1]:02X}{color_val.rgb[2]:02X}')
+
+            border_val = border_props.get('val', 'single')
+            bdr.set(qn('w:val'), border_val)
+            bdr.set(qn('w:sz'), str(border_props.get('sz', 12))) # Default 1.5pt
+
+            # Only set color if the border is not 'nil' (i.e., it's an actual border)
+            if border_val != 'nil':
+                color_val = border_props.get('color', RGBColor(0, 0, 0)) # Default black
+                if isinstance(color_val, RGBColor): # Ensure it's an RGBColor object before accessing .rgb
+                    hex_color = f'{color_val.rgb[0]:02X}{color_val.rgb[1]:02X}{color_val.rgb[2]:02X}'
+                    bdr.set(qn('w:color'), hex_color)
+                else:
+                    # Fallback to a default black if for some reason color_val is not RGBColor (shouldn't happen with default)
+                    bdr.set(qn('w:color'), '000000') # Black hex
+            
             tcPr.append(bdr)
 
 # --- Function to generate DOCX ---
